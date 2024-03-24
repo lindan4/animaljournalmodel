@@ -4,7 +4,7 @@ import math
 import keras
 from keras.models import Sequential
 from keras.layers import Dense, Conv2D , MaxPool2D , Flatten , Dropout 
-from keras.src.legacy.preprocessing.image import ImageDataGenerator
+from keras.preprocessing.image import ImageDataGenerator
 from keras.optimizers import Adam
 
 from sklearn.metrics import classification_report,confusion_matrix
@@ -22,7 +22,11 @@ import imghdr
 
 import shutil
 
+import filetype
+
 img_size = 224
+epoch_val = 650
+
 
 def get_files_from_folder(path):
     files = os.listdir(path)
@@ -38,9 +42,14 @@ def prep_train_and_test_data(origin_path, train_ratio):
     train_labels = []
     test_labels = []
 
+    confusion_matr_labels = []
+
 
     for i in range(len(dir)):
         label = dir[i]
+
+        confusion_matr_labels.append(f"{label} - Class {i}")
+
         img_path = os.path.join(origin_path, label)
 
         files = get_files_from_folder(img_path)
@@ -52,13 +61,16 @@ def prep_train_and_test_data(origin_path, train_ratio):
         local_train_labels = []
         local_test_labels = []
 
+        
+
         for file in files:
             file_path = os.path.join(img_path, file)
 
-            if (imghdr.what(file_path) == 'jpeg'):
+            if (filetype.is_image(file_path)):
                 try:
                     cv_img_read = cv2.imread(file_path)[...,::-1]
                     cv_resize_img = cv2.resize(cv_img_read, (img_size, img_size))
+
 
                     if len(local_train_data) < train_count:
                         local_train_data.append(cv_resize_img)
@@ -77,12 +89,12 @@ def prep_train_and_test_data(origin_path, train_ratio):
         test_labels.extend(local_test_labels)
     
 
-    return np.array(train_data), np.array(train_labels), np.array(test_data), np.array(test_labels), len(dir)
+    return np.array(train_data), np.array(train_labels), np.array(test_data), np.array(test_labels), len(dir), confusion_matr_labels
 
         
 def plot_data(data_arr):
     l = []
-    for [item, label] in data_arr:
+    for [_, label] in data_arr:
         l.append(label)
         
     sns.countplot(x=l)
@@ -149,8 +161,6 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description="Dataset divider")
     parser.add_argument("--data_origin_path", required=True,
         help="Path to data")
-    parser.add_argument("--test_data_path", required=True,
-        help="Path in which the test data should be saved")
     parser.add_argument("--train_ratio", required=True,
         help="Train ratio - 0.7 means splitting data in 70 % train and 30 % test")
     return parser.parse_args()
@@ -159,7 +169,7 @@ def parse_arguments():
 args = parse_arguments()
 
 # Generate training and test arrays
-train_data, train_labels, test_data, test_labels, label_count = prep_train_and_test_data(args.data_origin_path, float(args.train_ratio))
+train_data, train_labels, test_data, test_labels, label_count, conf_labels = prep_train_and_test_data(args.data_origin_path, float(args.train_ratio))
 
 x_train_arr, y_train_arr, x_test_arr, y_test_arr = data_preprocess(train_data, train_labels, test_data, test_labels)
 
@@ -204,14 +214,14 @@ opt = Adam(learning_rate=0.000001)
 model.compile(optimizer = opt , loss = keras.losses.SparseCategoricalCrossentropy(from_logits=True) , metrics = ['accuracy'])
 
 
-history = model.fit(x_train_arr, y_train_arr, epochs = 500)
+history = model.fit(x_train_arr, y_train_arr, epochs = epoch_val, validation_data=(x_test_arr, y_test_arr))
 
 acc = history.history['accuracy']
 val_acc = history.history['val_accuracy']
 loss = history.history['loss']
 val_loss = history.history['val_loss']
 
-epochs_range = range(500)
+epochs_range = range(epoch_val)
 
 plt.figure(figsize=(15, 15))
 plt.subplot(2, 2, 1)
@@ -227,4 +237,13 @@ plt.legend(loc='upper right')
 plt.title('Training and Validation Loss')
 plt.show()
 
+
+predictions = model.predict(x_test_arr)
+# Get the class indices with argmax
+predictions = predictions.argmax(axis=-1)
+predictions = predictions.reshape(1,-1)[0]
+print(classification_report(y_test_arr, predictions, target_names = conf_labels))
+
+
 model.save("animal_model.h5")
+model.save("animal_keras_model.keras")
