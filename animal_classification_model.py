@@ -25,7 +25,9 @@ import shutil
 import filetype
 
 img_size = 224
-epoch_val = 650
+epoch_val = 5
+
+batch_size = 64
 
 
 def get_files_from_folder(path):
@@ -35,6 +37,8 @@ def get_files_from_folder(path):
 def prep_train_and_test_data(origin_path, train_ratio):
     # Too many values to unpack if I don't add next, but why
     _, dir, _ = next(os.walk(origin_path))
+
+    print(len(dir))
 
 
     train_data = []
@@ -101,7 +105,7 @@ def plot_data(data_arr):
 
     plt.show()
 
-def data_preprocess(train_data, train_labels, test_data, test_labels):
+def data_preprocess(train_data, train_labels, te bst_data, test_labels):
     x_train = []
     y_train = []
     x_val = []
@@ -168,6 +172,10 @@ def parse_arguments():
 
 args = parse_arguments()
 
+
+# Enable eager execution
+tf.config.run_functions_eagerly(True)
+
 # Generate training and test arrays
 train_data, train_labels, test_data, test_labels, label_count, conf_labels = prep_train_and_test_data(args.data_origin_path, float(args.train_ratio))
 
@@ -210,35 +218,23 @@ model.summary()
 
 opt = Adam(learning_rate=0.000001)
 
+
+train_generator = datagen.flow(x_train_arr, y_train_arr, batch_size)
 # Questioning my life decisions????
 model.compile(optimizer = opt , loss = keras.losses.SparseCategoricalCrossentropy(from_logits=True) , metrics = ['accuracy'])
 
 
-history = model.fit(x_train_arr, y_train_arr, epochs = epoch_val, validation_data=(x_test_arr, y_test_arr))
+# history = model.fit(x_train_arr, y_train_arr, epochs = epoch_val, validation_data=(x_test_arr, y_test_arr))
 
-acc = history.history['accuracy']
-val_acc = history.history['val_accuracy']
-loss = history.history['loss']
-val_loss = history.history['val_loss']
-
-epochs_range = range(epoch_val)
-
-plt.figure(figsize=(15, 15))
-plt.subplot(2, 2, 1)
-plt.plot(epochs_range, acc, label='Training Accuracy')
-plt.plot(epochs_range, val_acc, label='Validation Accuracy')
-plt.legend(loc='lower right')
-plt.title('Training and Validation Accuracy')
-
-plt.subplot(2, 2, 2)
-plt.plot(epochs_range, loss, label='Training Loss')
-plt.plot(epochs_range, val_loss, label='Validation Loss')
-plt.legend(loc='upper right')
-plt.title('Training and Validation Loss')
-plt.show()
-
+history = model.fit_generator(
+    train_generator,
+    steps_per_epoch=len(x_train_arr) // batch_size,  # Number of batches per epoch
+    epochs=epoch_val,
+    validation_data=(x_test_arr, y_test_arr)
+)
 
 predictions = model.predict(x_test_arr)
+
 # Get the class indices with argmax
 predictions = predictions.argmax(axis=-1)
 predictions = predictions.reshape(1,-1)[0]
