@@ -106,21 +106,6 @@ def reshape_labels(y_labels, num_classes):
 
 
 def data_preprocess(train_data, train_labels, test_data, test_labels, num_classes):
-    # # Convert list of images to NumPy arrays
-    # x_train = np.array(train_data)
-    # x_val = np.array(test_data)
-    
-    # # Normalize pixel values
-    # x_train = x_train / 255.0
-    # x_val = x_val / 255.0
-    
-    # # Reshape data arrays for CNNs
-    # x_train = x_train.reshape(-1, img_size, img_size, 3)  # Assuming 3 channels for RGB images
-    # x_val = x_val.reshape(-1, img_size, img_size, 3)      # Assuming 3 channels for RGB images
-    
-    # y_train = np.array(train_labels)
-    # y_val = np.array(test_labels)
-
     # Normalize pixel values
     x_train = train_data / 255.0
     x_test = test_data / 255.0
@@ -156,7 +141,6 @@ train_data, train_labels, test_data, test_labels, label_count, class_labels = pr
 
 x_train_arr, y_train_arr, x_test_arr, y_test_arr = data_preprocess(train_data, train_labels, test_data, test_labels, label_count)
 
-# # ??
 # Data augmentation
 datagen = ImageDataGenerator(
     rotation_range=30,
@@ -173,30 +157,32 @@ datagen.fit(x_train_arr)
 
 # Create model
 model = Sequential([
-    Conv2D(16, 3, padding="same", activation="relu", input_shape=(img_size,img_size,3)),
-    MaxPool2D(),
-    Conv2D(32, 3, padding="same", activation="relu"),
-    MaxPool2D(),
+    Conv2D(32, (3, 3), padding="same", activation="relu", input_shape=(img_size, img_size, 3)),
+    Conv2D(64, (3, 3), padding="same", activation="relu"),
+    MaxPool2D(pool_size=(2, 2)),
+    Conv2D(128, (3, 3), padding="same", activation="relu"),
+    MaxPool2D(pool_size=(2, 2)),
     Flatten(),
-    Dense(32, activation="relu"),
-    Dense(label_count, activation="sigmoid")  # Using sigmoid activation for multi-label classification
+    Dense(256, activation="relu"),
+    Dropout(0.5),  # Adding dropout for regularization
+    Dense(label_count, activation="sigmoid")
 ])
 
 model.summary()
 
-opt = Adam(learning_rate=0.000001)
+opt = Adam(learning_rate=0.00005)
 
 # Questioning my life decisions????
 model.compile(optimizer = opt , loss='binary_crossentropy', metrics = ['accuracy'])
 
 # Train the model
-history = model.fit(
-    datagen.flow(x_train_arr, y_train_arr, batch_size=batch_size),
-    epochs=epoch_val,
-    validation_data=(x_test_arr, y_test_arr)
-)
+# history = model.fit(
+#     datagen.flow(x_train_arr, y_train_arr, batch_size=batch_size),
+#     epochs=epoch_val,
+#     validation_data=(x_test_arr, y_test_arr)
+# )
 
-# history = model.fit(x_train_arr, y_train_arr, epochs = epoch_val, validation_data=(x_test_arr, y_test_arr))
+history = model.fit(x_train_arr, y_train_arr, epochs = epoch_val, validation_data=(x_test_arr, y_test_arr))
 
 predictions = model.predict(x_test_arr)
 # Convert predicted probabilities to binary predictions using a threshold
