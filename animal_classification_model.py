@@ -24,9 +24,9 @@ from sklearn.model_selection import train_test_split
 
 
 img_size = 150
-epoch_val = 1
+epoch_val = 100
 
-batch_size = 32
+batch_size = 20
 
 
 def get_files_from_folder(path):
@@ -168,7 +168,7 @@ datagen = ImageDataGenerator(
 )
 
 
-# datagen.fit(x_train_arr)
+datagen.fit(x_train_arr)
 
 
 # Create model
@@ -186,26 +186,17 @@ model.summary()
 
 opt = Adam(learning_rate=0.000001)
 
-train_generator = datagen.flow(x_train_arr, y_train_arr, batch_size=batch_size)
-
 # Questioning my life decisions????
 model.compile(optimizer = opt , loss='binary_crossentropy', metrics = ['accuracy'])
 
-# history = model.fit(x_train_arr, y_train_arr, epochs = epoch_val, validation_data=(x_test_arr, y_test_arr))
-
-# Calculate the number of steps per epoch
-steps_per_epoch = len(x_train_arr) // batch_size
-
-# If there are remaining samples, adjust the steps_per_epoch to include them in the last partial batch
-if len(x_train_arr) % batch_size != 0:
-    steps_per_epoch += 1
-
+# Train the model
 history = model.fit(
-    train_generator,
-    steps_per_epoch=steps_per_epoch,
+    datagen.flow(x_train_arr, y_train_arr, batch_size=batch_size),
     epochs=epoch_val,
     validation_data=(x_test_arr, y_test_arr)
 )
+
+# history = model.fit(x_train_arr, y_train_arr, epochs = epoch_val, validation_data=(x_test_arr, y_test_arr))
 
 predictions = model.predict(x_test_arr)
 # Convert predicted probabilities to binary predictions using a threshold
