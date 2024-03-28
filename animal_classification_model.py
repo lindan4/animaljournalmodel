@@ -1,13 +1,12 @@
 import matplotlib.pyplot as plt
 import seaborn as sns
-import math
-import keras
+
 from keras.models import Sequential
 from keras.layers import Dense, Conv2D , MaxPool2D , Flatten , Dropout 
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from keras.optimizers import Adam
 
-from sklearn.metrics import classification_report,confusion_matrix
+from sklearn.metrics import classification_report
 
 import tensorflow as tf
 
@@ -18,9 +17,11 @@ import numpy as np
 
 import argparse
 
-import shutil
 
 import filetype
+
+from sklearn.model_selection import train_test_split
+
 
 img_size = 150
 epoch_val = 1
@@ -36,62 +37,47 @@ def prep_train_and_test_data(origin_path, train_ratio):
     # Too many values to unpack if I don't add next, but why
     _, dir, _ = next(os.walk(origin_path))
 
-    print(len(dir))
-
 
     train_data = []
     test_data = []
     train_labels = []
     test_labels = []
 
-    confusion_matr_labels = []
+    classification_labels = []
 
 
-    for i in range(len(dir)):
-        label = dir[i]
-
-        confusion_matr_labels.append(f"{label} - Class {i}")
+    for i, label in enumerate(dir):
+        classification_labels.append(f"{label} - Class {i}")
 
         img_path = os.path.join(origin_path, label)
-
         files = get_files_from_folder(img_path)
 
-        train_count = math.floor(len(files) * train_ratio)
+        # Split files into training and testing sets
+        train_files, test_files = train_test_split(files, train_size=train_ratio, random_state=42)
 
-        local_train_data = []
-        local_test_data = []
-        local_train_labels = []
-        local_test_labels = []
-
-        
-
-        for file in files:
+        for file in train_files:
             file_path = os.path.join(img_path, file)
-
             if (filetype.is_image(file_path)):
                 try:
                     cv_img_read = cv2.imread(file_path)[...,::-1]
                     cv_resize_img = cv2.resize(cv_img_read, (img_size, img_size))
-
-
-                    if len(local_train_data) < train_count:
-                        local_train_data.append(cv_resize_img)
-                        local_train_labels.append(i)
-                    else:
-                        local_test_data.append(cv_resize_img)
-                        local_test_labels.append(i)
+                    train_data.append(cv_resize_img)
+                    train_labels.append(i)
                 except Exception as e:
                     print(e)
 
+        for file in test_files:
+            file_path = os.path.join(img_path, file)
+            if (filetype.is_image(file_path)):
+                try:
+                    cv_img_read = cv2.imread(file_path)[...,::-1]
+                    cv_resize_img = cv2.resize(cv_img_read, (img_size, img_size))
+                    test_data.append(cv_resize_img)
+                    test_labels.append(i)
+                except Exception as e:
+                    print(e)
 
-        train_data.extend(local_train_data)
-        train_labels.extend(local_train_labels)
-        
-        test_data.extend(local_test_data)
-        test_labels.extend(local_test_labels)
-    
-
-    return np.array(train_data), np.array(train_labels), np.array(test_data), np.array(test_labels), len(dir), confusion_matr_labels
+    return np.array(train_data), np.array(train_labels), np.array(test_data), np.array(test_labels), len(dir), classification_labels
 
         
 def plot_data(data_arr):
@@ -166,7 +152,7 @@ args = parse_arguments()
 tf.config.run_functions_eagerly(True)
 
 # Generate training and test arrays
-train_data, train_labels, test_data, test_labels, label_count, conf_labels = prep_train_and_test_data(args.data_origin_path, float(args.train_ratio))
+train_data, train_labels, test_data, test_labels, label_count, class_labels = prep_train_and_test_data(args.data_origin_path, float(args.train_ratio))
 
 x_train_arr, y_train_arr, x_test_arr, y_test_arr = data_preprocess(train_data, train_labels, test_data, test_labels, label_count)
 
@@ -205,9 +191,6 @@ train_generator = datagen.flow(x_train_arr, y_train_arr, batch_size=batch_size)
 # Questioning my life decisions????
 model.compile(optimizer = opt , loss='binary_crossentropy', metrics = ['accuracy'])
 
-# So for some odd reason, this array is empty...
-print(x_test_arr)
-
 # history = model.fit(x_train_arr, y_train_arr, epochs = epoch_val, validation_data=(x_test_arr, y_test_arr))
 
 # Calculate the number of steps per epoch
@@ -225,12 +208,12 @@ history = model.fit(
 )
 
 predictions = model.predict(x_test_arr)
-
-# Get the class indices with argmax
-predictions = predictions.argmax(axis=-1)
-predictions = predictions.reshape(1,-1)[0]
-print(classification_report(y_test_arr, predictions, target_names = conf_labels))
+# Convert predicted probabilities to binary predictions using a threshold
+threshold = 0.5  # Adjust threshold as needed
+binary_predictions = (predictions > threshold).astype(int)
 
 
-model.save("animal_model.h5")
+# Show classification report
+print(classification_report(y_test_arr, binary_predictions, target_names=class_labels))
+
 model.save("animal_keras_model.keras")
