@@ -2,9 +2,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from keras.models import Sequential
-from keras.layers import Dense, Conv2D , MaxPool2D , Flatten , Dropout 
+from keras.layers import Dense, Conv2D , MaxPool2D , Flatten , Dropout, BatchNormalization, GlobalAveragePooling2D
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from keras.optimizers import Adam
+from keras.regularizers import l2
 
 from sklearn.metrics import classification_report
 
@@ -24,7 +25,7 @@ from sklearn.model_selection import train_test_split
 
 
 img_size = 150
-epoch_val = 100
+epoch_val = 500
 
 batch_size = 20
 
@@ -143,6 +144,11 @@ x_train_arr, y_train_arr, x_test_arr, y_test_arr = data_preprocess(train_data, t
 
 # Data augmentation
 datagen = ImageDataGenerator(
+    featurewise_center=False,  # set input mean to 0 over the dataset
+    samplewise_center=False,  # set each sample mean to 0
+    featurewise_std_normalization=False,  # divide inputs by std of the dataset
+    samplewise_std_normalization=False,  # divide each input by its std
+    zca_whitening=False,  # apply ZCA whitening
     rotation_range=30,
     zoom_range=0.2,
     width_shift_range=0.1,
@@ -156,24 +162,30 @@ datagen.fit(x_train_arr)
 
 
 # Create model
+# Transfer Learning with a Pre-trained Model (VGG16 in this example)
+base_model = tf.keras.applications.VGG16(weights='imagenet', include_top=False, input_shape=(img_size, img_size, 3))
+
+# Freeze convolutional layers
+for layer in base_model.layers:
+    layer.trainable = False
+
+# Add custom classification head
 model = Sequential([
-    Conv2D(32, (3, 3), padding="same", activation="relu", input_shape=(img_size, img_size, 3)),
-    Conv2D(64, (3, 3), padding="same", activation="relu"),
-    MaxPool2D(pool_size=(2, 2)),
-    Conv2D(128, (3, 3), padding="same", activation="relu"),
-    MaxPool2D(pool_size=(2, 2)),
-    Flatten(),
-    Dense(256, activation="relu"),
-    Dropout(0.5),  # Adding dropout for regularization
-    Dense(label_count, activation="sigmoid")
+    base_model,
+    GlobalAveragePooling2D(),
+    Dense(256, activation='relu'),
+    Dropout(0.5),
+    Dense(256, activation='relu'),
+    Dropout(0.5),
+    Dense(128, activation='relu'),
+    Dropout(0.5),
+    Dense(label_count, activation='sigmoid')
 ])
 
-model.summary()
-
-opt = Adam(learning_rate=0.00005)
-
-# Questioning my life decisions????
-model.compile(optimizer = opt , loss='binary_crossentropy', metrics = ['accuracy'])
+# Compile the model
+model.compile(optimizer='adam',
+              loss='binary_crossentropy',  # for multilabel classification
+              metrics=['accuracy'])
 
 # Train the model
 # history = model.fit(
