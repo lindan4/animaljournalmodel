@@ -7,7 +7,7 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from keras.optimizers import Adam
 from keras.regularizers import l2
 
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report  
 
 import tensorflow as tf
 
@@ -25,9 +25,9 @@ from sklearn.model_selection import train_test_split
 
 
 img_size = 150
-epoch_val = 500
+epoch_val = 100
 
-batch_size = 20
+batch_size = 32
 
 
 def get_files_from_folder(path):
@@ -178,12 +178,20 @@ model = Sequential([
     Dense(256, activation='relu'),
     Dropout(0.5),
     Dense(128, activation='relu'),
-    Dropout(0.5),
+    Dropout(0.3),
     Dense(label_count, activation='sigmoid')
 ])
 
-# Compile the model
-model.compile(optimizer='adam',
+# Implement learning rate scheduler
+lr_scheduler = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, min_lr=0.0001)
+
+
+# Specify learning rate during optimizer initialization
+initial_learning_rate = 0.003
+optimizer = Adam(learning_rate=initial_learning_rate)
+
+# Compile the model 
+model.compile(optimizer=optimizer,
               loss='binary_crossentropy',  # for multilabel classification
               metrics=['accuracy'])
 
@@ -194,7 +202,7 @@ model.compile(optimizer='adam',
 #     validation_data=(x_test_arr, y_test_arr)
 # )
 
-history = model.fit(x_train_arr, y_train_arr, epochs = epoch_val, validation_data=(x_test_arr, y_test_arr))
+history = model.fit(x_train_arr, y_train_arr, epochs = epoch_val, validation_data=(x_test_arr, y_test_arr), callbacks=[lr_scheduler])
 
 predictions = model.predict(x_test_arr)
 # Convert predicted probabilities to binary predictions using a threshold
