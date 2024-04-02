@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from keras.models import Sequential
-from keras.layers import Dense, Conv2D , MaxPool2D , Flatten , Dropout, BatchNormalization, GlobalAveragePooling2D
+from keras.layers import Dense, Dropout, GlobalAveragePooling2D
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from keras.optimizers import Adam, SGD, RMSprop
 from keras.regularizers import l2
@@ -35,7 +35,6 @@ def get_files_from_folder(path):
     return np.asarray(files)
 
 def prep_train_and_test_data(origin_path, train_ratio):
-    # Too many values to unpack if I don't add next, but why
     _, dir, _ = next(os.walk(origin_path))
 
 
@@ -92,7 +91,6 @@ def plot_data(data_arr):
 
 
 
-# Example: Convert integer labels to binary arrays
 def reshape_labels(y_labels, num_classes):
     num_samples = len(y_labels)
     y_binary = np.zeros((num_samples, num_classes), dtype=np.int32)  # Initialize binary label array
@@ -157,7 +155,7 @@ test_datagen = ImageDataGenerator()
 train_datagen.fit(x_train_arr)
 
 
-# Create model
+
 # Transfer Learning with a Pre-trained Model (VGG16 in this example)
 base_model = tf.keras.applications.VGG16(weights='imagenet', include_top=False, input_shape=(img_size, img_size, 3))
 
@@ -187,7 +185,6 @@ learning_rate = 0.00125  # Starting learning rate
 
 # Adjust learning rate based on dataset size
 # Rule of thumb: Smaller datasets may require larger learning rates
-
 optimizer = RMSprop(learning_rate=learning_rate)
 # optimizer = Adam(learning_rate=initial_learning_rate)
 
