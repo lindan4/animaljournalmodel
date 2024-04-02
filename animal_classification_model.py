@@ -4,7 +4,7 @@ import seaborn as sns
 from keras.models import Sequential
 from keras.layers import Dense, Conv2D , MaxPool2D , Flatten , Dropout, BatchNormalization, GlobalAveragePooling2D
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from keras.optimizers import Adam
+from keras.optimizers import Adam, SGD, RMSprop
 from keras.regularizers import l2
 
 from sklearn.metrics import classification_report  
@@ -24,8 +24,8 @@ import filetype
 from sklearn.model_selection import train_test_split
 
 
-img_size = 150
-epoch_val = 100
+img_size = 224
+epoch_val = 550
 
 batch_size = 32
 
@@ -143,22 +143,18 @@ train_data, train_labels, test_data, test_labels, label_count, class_labels = pr
 x_train_arr, y_train_arr, x_test_arr, y_test_arr = data_preprocess(train_data, train_labels, test_data, test_labels, label_count)
 
 # Data augmentation
-datagen = ImageDataGenerator(
-    featurewise_center=False,  # set input mean to 0 over the dataset
-    samplewise_center=False,  # set each sample mean to 0
-    featurewise_std_normalization=False,  # divide inputs by std of the dataset
-    samplewise_std_normalization=False,  # divide each input by its std
-    zca_whitening=False,  # apply ZCA whitening
+train_datagen = ImageDataGenerator(
     rotation_range=30,
     zoom_range=0.2,
     width_shift_range=0.1,
     height_shift_range=0.1,
-    horizontal_flip=True,
-    vertical_flip=False
+    horizontal_flip=True
 )
 
+test_datagen = ImageDataGenerator()
 
-datagen.fit(x_train_arr)
+
+train_datagen.fit(x_train_arr)
 
 
 # Create model
@@ -183,12 +179,17 @@ model = Sequential([
 ])
 
 # Implement learning rate scheduler
-lr_scheduler = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, min_lr=0.0001)
+# lr_scheduler = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, min_lr=0.0001)
 
 
-# Specify learning rate during optimizer initialization
-initial_learning_rate = 0.003
-optimizer = Adam(learning_rate=initial_learning_rate)
+# Define the learning rate and momentum
+learning_rate = 0.00125  # Starting learning rate
+
+# Adjust learning rate based on dataset size
+# Rule of thumb: Smaller datasets may require larger learning rates
+
+optimizer = RMSprop(learning_rate=learning_rate)
+# optimizer = Adam(learning_rate=initial_learning_rate)
 
 # Compile the model 
 model.compile(optimizer=optimizer,
@@ -196,13 +197,13 @@ model.compile(optimizer=optimizer,
               metrics=['accuracy'])
 
 # Train the model
-# history = model.fit(
-#     datagen.flow(x_train_arr, y_train_arr, batch_size=batch_size),
-#     epochs=epoch_val,
-#     validation_data=(x_test_arr, y_test_arr)
-# )
+history = model.fit(
+    train_datagen.flow(x_train_arr, y_train_arr, batch_size=batch_size),
+    epochs=epoch_val,
+    validation_data=test_datagen.flow(x_test_arr, y_test_arr, batch_size=batch_size)
+)
 
-history = model.fit(x_train_arr, y_train_arr, epochs = epoch_val, validation_data=(x_test_arr, y_test_arr), callbacks=[lr_scheduler])
+# history = model.fit(x_train_arr, y_train_arr, epochs = epoch_val, validation_data=(x_test_arr, y_test_arr))
 
 predictions = model.predict(x_test_arr)
 # Convert predicted probabilities to binary predictions using a threshold
