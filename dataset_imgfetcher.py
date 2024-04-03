@@ -4,7 +4,6 @@ import requests
 
 
 def fetch_image_urls(query, num_images, flickr_key):
-    api_key = "YOUR_FLICKR_API_KEY"
     url = f"https://www.flickr.com/services/rest/?method=flickr.photos.search&api_key={flickr_key}&text={query}_animal&extras=url_m&per_page={num_images}&format=json&nojsoncallback=1"
     response = requests.get(url)
     data = response.json()
