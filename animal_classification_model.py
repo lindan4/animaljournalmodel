@@ -1,13 +1,13 @@
 import matplotlib.pyplot as plt
 import seaborn as sns
-import math
-import keras
-from keras.models import Sequential
-from keras.layers import Dense, Conv2D , MaxPool2D , Flatten , Dropout 
-from keras.preprocessing.image import ImageDataGenerator
-from keras.optimizers import Adam
 
-from sklearn.metrics import classification_report,confusion_matrix
+from keras.models import Sequential
+from keras.layers import Dense, Dropout, GlobalAveragePooling2D
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from keras.optimizers import Adam, SGD, RMSprop
+from keras.regularizers import l2
+
+from sklearn.metrics import classification_report  
 
 import tensorflow as tf
 
@@ -18,16 +18,16 @@ import numpy as np
 
 import argparse
 
-import imghdr
-
-import shutil
 
 import filetype
 
-img_size = 224
-epoch_val = 5
+from sklearn.model_selection import train_test_split
 
-batch_size = 64
+
+img_size = 224
+epoch_val = 550
+
+batch_size = 32
 
 
 def get_files_from_folder(path):
@@ -35,10 +35,7 @@ def get_files_from_folder(path):
     return np.asarray(files)
 
 def prep_train_and_test_data(origin_path, train_ratio):
-    # Too many values to unpack if I don't add next, but why
     _, dir, _ = next(os.walk(origin_path))
-
-    print(len(dir))
 
 
     train_data = []
@@ -46,54 +43,41 @@ def prep_train_and_test_data(origin_path, train_ratio):
     train_labels = []
     test_labels = []
 
-    confusion_matr_labels = []
+    classification_labels = []
 
 
-    for i in range(len(dir)):
-        label = dir[i]
-
-        confusion_matr_labels.append(f"{label} - Class {i}")
+    for i, label in enumerate(dir):
+        classification_labels.append(f"{label} - Class {i}")
 
         img_path = os.path.join(origin_path, label)
-
         files = get_files_from_folder(img_path)
 
-        train_count = math.floor(len(files) * train_ratio)
+        # Split files into training and testing sets
+        train_files, test_files = train_test_split(files, train_size=train_ratio, random_state=42)
 
-        local_train_data = []
-        local_test_data = []
-        local_train_labels = []
-        local_test_labels = []
-
-        
-
-        for file in files:
+        for file in train_files:
             file_path = os.path.join(img_path, file)
-
             if (filetype.is_image(file_path)):
                 try:
                     cv_img_read = cv2.imread(file_path)[...,::-1]
                     cv_resize_img = cv2.resize(cv_img_read, (img_size, img_size))
-
-
-                    if len(local_train_data) < train_count:
-                        local_train_data.append(cv_resize_img)
-                        local_train_labels.append(i)
-                    else:
-                        local_test_data.append(cv_resize_img)
-                        local_test_labels.append(i)
+                    train_data.append(cv_resize_img)
+                    train_labels.append(i)
                 except Exception as e:
                     print(e)
 
+        for file in test_files:
+            file_path = os.path.join(img_path, file)
+            if (filetype.is_image(file_path)):
+                try:
+                    cv_img_read = cv2.imread(file_path)[...,::-1]
+                    cv_resize_img = cv2.resize(cv_img_read, (img_size, img_size))
+                    test_data.append(cv_resize_img)
+                    test_labels.append(i)
+                except Exception as e:
+                    print(e)
 
-        train_data.extend(local_train_data)
-        train_labels.extend(local_train_labels)
-        
-        test_data.extend(local_test_data)
-        test_labels.extend(local_test_labels)
-    
-
-    return np.array(train_data), np.array(train_labels), np.array(test_data), np.array(test_labels), len(dir), confusion_matr_labels
+    return np.array(train_data), np.array(train_labels), np.array(test_data), np.array(test_labels), len(dir), classification_labels
 
         
 def plot_data(data_arr):
@@ -105,59 +89,34 @@ def plot_data(data_arr):
 
     plt.show()
 
-def data_preprocess(train_data, train_labels, te bst_data, test_labels):
-    x_train = []
-    y_train = []
-    x_val = []
-    y_val = []
 
 
-    # for feature, label in train:
-    #     x_train.append(feature)
-    #     y_train.append(label)
-
-    # for feature, label in test:
-    #     x_val.append(feature)
-    #     y_val.append(label)
-
-    # Normalize the data
-    x_train = np.array(train_data) / 255
-    x_val = np.array(test_data) / 255
-
-    x_train.reshape(-1, img_size, img_size, 1)
-    y_train = np.array(train_labels)
-
-    x_val.reshape(-1, img_size, img_size, 1)
-    y_val = np.array(test_labels)
-
-    # for feature, label in train:
-    #     normalizedTrainFeature = np.zeros((img_size, img_size))
-    #     normalizedTrainFeature = cv2.normalize(feature, normalizedTrainFeature, 0, 255, cv2.NORM_MINMAX)
-    #     x_train.append(normalizedTrainFeature)
-    #     y_train.append(label)
-
-    # for feature, label in test:
-    #     normalizedTestFeature = np.zeros((img_size, img_size))
-    #     normalizedTestFeature = cv2.normalize(feature, normalizedTestFeature, 0, 255, cv2.NORM_MINMAX)
-    #     x_test.append(normalizedTestFeature)
-    #     y_test.append(label)
-
-
+def reshape_labels(y_labels, num_classes):
+    num_samples = len(y_labels)
+    y_binary = np.zeros((num_samples, num_classes), dtype=np.int32)  # Initialize binary label array
     
+    for i, label in enumerate(y_labels):
+        # Assuming label is an integer representing the class index
+        # Set the corresponding position to 1 to indicate the presence of the class
+        y_binary[i, label] = 1
+    
+    return y_binary
 
-    # Normalize the data
-    # x_train = np.array(x_train) / 255
-    # x_test = np.array(x_test) / 255
-
-    # x_train = np.array(x_train).reshape(-1, img_size, img_size, 1)
-    # y_train = np.array(y_train)
 
 
-    # x_test = np.array(x_test).reshape(-1, img_size, img_size, 1)
-    # y_test = np.array(y_test)
+def data_preprocess(train_data, train_labels, test_data, test_labels, num_classes):
+    # Normalize pixel values
+    x_train = train_data / 255.0
+    x_test = test_data / 255.0
 
-    # return x_train, y_train, x_test, y_test
-    return x_train, y_train, x_val, y_val
+    x_train = x_train.reshape(-1, img_size, img_size, 3)  # Assuming 3 channels for RGB images
+    x_test = x_test.reshape(-1, img_size, img_size, 3)      # Assuming 3 channels for RGB images
+
+
+    y_train = reshape_labels(train_labels, num_classes)
+    y_test = reshape_labels(test_labels, num_classes)
+
+    return x_train, y_train, x_test, y_test
 
     
 
@@ -177,69 +136,79 @@ args = parse_arguments()
 tf.config.run_functions_eagerly(True)
 
 # Generate training and test arrays
-train_data, train_labels, test_data, test_labels, label_count, conf_labels = prep_train_and_test_data(args.data_origin_path, float(args.train_ratio))
+train_data, train_labels, test_data, test_labels, label_count, class_labels = prep_train_and_test_data(args.data_origin_path, float(args.train_ratio))
 
-x_train_arr, y_train_arr, x_test_arr, y_test_arr = data_preprocess(train_data, train_labels, test_data, test_labels)
+x_train_arr, y_train_arr, x_test_arr, y_test_arr = data_preprocess(train_data, train_labels, test_data, test_labels, label_count)
 
-# # ??
-datagen = ImageDataGenerator(
-        featurewise_center=False,  # set input mean to 0 over the dataset
-        samplewise_center=False,  # set each sample mean to 0
-        featurewise_std_normalization=False,  # divide inputs by std of the dataset
-        samplewise_std_normalization=False,  # divide each input by its std
-        zca_whitening=False,  # apply ZCA whitening
-        rotation_range = 30,  # randomly rotate images in the range (degrees, 0 to 180)
-        zoom_range = 0.2, # Randomly zoom image 
-        width_shift_range=0.1,  # randomly shift images horizontally (fraction of total width)
-        height_shift_range=0.1,  # randomly shift images vertically (fraction of total height)
-        horizontal_flip = True,  # randomly flip images
-        vertical_flip=False)  # randomly flip images
+# Data augmentation
+train_datagen = ImageDataGenerator(
+    rotation_range=30,
+    zoom_range=0.2,
+    width_shift_range=0.1,
+    height_shift_range=0.1,
+    horizontal_flip=True
+)
+
+test_datagen = ImageDataGenerator()
 
 
-datagen.fit(x_train_arr)
+train_datagen.fit(x_train_arr)
 
 
-model = Sequential()
-model.add(Conv2D(32,3,padding="same", activation="relu", input_shape=(224,224,3)))
-model.add(MaxPool2D())
 
-model.add(Conv2D(32, 3, padding="same", activation="relu"))
-model.add(MaxPool2D())
+# Transfer Learning with a Pre-trained Model (VGG16 in this example)
+base_model = tf.keras.applications.VGG16(weights='imagenet', include_top=False, input_shape=(img_size, img_size, 3))
 
-model.add(Conv2D(64, 3, padding="same", activation="relu"))
-model.add(MaxPool2D())
-model.add(Dropout(0.4))
+# Freeze convolutional layers
+for layer in base_model.layers:
+    layer.trainable = False
 
-model.add(Flatten())
-model.add(Dense(128,activation="relu"))
-model.add(Dense(label_count, activation="softmax"))
+# Add custom classification head
+model = Sequential([
+    base_model,
+    GlobalAveragePooling2D(),
+    Dense(256, activation='relu'),
+    Dropout(0.5),
+    Dense(256, activation='relu'),
+    Dropout(0.5),
+    Dense(128, activation='relu'),
+    Dropout(0.3),
+    Dense(label_count, activation='sigmoid')
+])
 
-model.summary()
+# Implement learning rate scheduler
+# lr_scheduler = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, min_lr=0.0001)
 
-opt = Adam(learning_rate=0.000001)
 
+# Define the learning rate and momentum
+learning_rate = 0.00125  # Starting learning rate
 
-train_generator = datagen.flow(x_train_arr, y_train_arr, batch_size)
-# Questioning my life decisions????
-model.compile(optimizer = opt , loss = keras.losses.SparseCategoricalCrossentropy(from_logits=True) , metrics = ['accuracy'])
+# Adjust learning rate based on dataset size
+# Rule of thumb: Smaller datasets may require larger learning rates
+optimizer = RMSprop(learning_rate=learning_rate)
+# optimizer = Adam(learning_rate=initial_learning_rate)
 
+# Compile the model 
+model.compile(optimizer=optimizer,
+              loss='binary_crossentropy',  # for multilabel classification
+              metrics=['accuracy'])
+
+# Train the model
+history = model.fit(
+    train_datagen.flow(x_train_arr, y_train_arr, batch_size=batch_size),
+    epochs=epoch_val,
+    validation_data=test_datagen.flow(x_test_arr, y_test_arr, batch_size=batch_size)
+)
 
 # history = model.fit(x_train_arr, y_train_arr, epochs = epoch_val, validation_data=(x_test_arr, y_test_arr))
 
-history = model.fit_generator(
-    train_generator,
-    steps_per_epoch=len(x_train_arr) // batch_size,  # Number of batches per epoch
-    epochs=epoch_val,
-    validation_data=(x_test_arr, y_test_arr)
-)
-
 predictions = model.predict(x_test_arr)
-
-# Get the class indices with argmax
-predictions = predictions.argmax(axis=-1)
-predictions = predictions.reshape(1,-1)[0]
-print(classification_report(y_test_arr, predictions, target_names = conf_labels))
+# Convert predicted probabilities to binary predictions using a threshold
+threshold = 0.5  # Adjust threshold as needed
+binary_predictions = (predictions > threshold).astype(int)
 
 
-model.save("animal_model.h5")
+# Show classification report
+print(classification_report(y_test_arr, binary_predictions, target_names=class_labels))
+
 model.save("animal_keras_model.keras")
